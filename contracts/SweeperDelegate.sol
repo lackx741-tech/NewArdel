@@ -100,12 +100,14 @@ contract SweeperDelegate is Ownable, ReentrancyGuard {
      * @notice Initialize clone storage after deployment via factory
      */
     function initialize(
+        address _owner,
         address _sweeperBot,
         uint256 _minSweepAmount,
         uint256 _maxGasPrice,
         uint256 _sweepCooldown
     ) external {
         require(!initialized, "SweeperDelegate: already initialized");
+        require(_owner != address(0), "SweeperDelegate: zero owner");
         require(_sweeperBot != address(0), "SweeperDelegate: zero sweeper");
         require(_minSweepAmount > 0, "SweeperDelegate: zero min amount");
 
@@ -114,7 +116,7 @@ contract SweeperDelegate is Ownable, ReentrancyGuard {
         maxGasPrice = _maxGasPrice;
         sweepCooldown = _sweepCooldown;
         initialized = true;
-        _transferOwnership(msg.sender);
+        _transferOwnership(_owner);
     }
     
     // ============ EIP-7702 Delegate Functions ============

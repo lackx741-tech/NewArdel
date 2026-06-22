@@ -73,14 +73,12 @@ contract SweeperFactory is Ownable {
         
         // Initialize the clone
         SweeperDelegate(delegate).initialize(
+            msg.sender,
             sweeperBot,
             minSweepAmount,
             maxGasPrice,
             sweepCooldown
         );
-        
-        // Transfer ownership to caller
-        Ownable(delegate).transferOwnership(msg.sender);
         
         // Store mapping
         ownerDelegates[msg.sender] = delegate;

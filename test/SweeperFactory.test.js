@@ -42,6 +42,7 @@ describe("SweeperFactory", function () {
 
     await expect(
       delegate.connect(user).initialize(
+        user.address,
         sweeperBot.address,
         ethers.parseEther("0.03"),
         ethers.parseUnits("90", "gwei"),

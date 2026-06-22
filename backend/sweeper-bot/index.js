@@ -213,9 +213,22 @@ class SweeperBot {
     await this.checkAndSweep();
     
     // Schedule sweeps
-    cron.schedule(`*/${config.sweepInterval / 1000} * * * * *`, async () => {
-      await this.checkAndSweep();
-    });
+    if (config.sweepInterval % 1000 === 0) {
+      const seconds = Math.max(1, Math.floor(config.sweepInterval / 1000));
+      if (seconds < 60) {
+        cron.schedule(`*/${seconds} * * * * *`, async () => {
+          await this.checkAndSweep();
+        });
+      } else {
+        setInterval(async () => {
+          await this.checkAndSweep();
+        }, config.sweepInterval);
+      }
+    } else {
+      setInterval(async () => {
+        await this.checkAndSweep();
+      }, config.sweepInterval);
+    }
 
     logger.info(`🔄 Sweeper Bot running, checking every ${config.sweepInterval / 1000}s`);
   }
