@@ -94,7 +94,7 @@ class SweeperBot {
       logger.info(`🔍 Checking ${this.delegatedAddresses.length} addresses for sweep...`);
       
       let sweepCount = 0;
-      let totalSwept = ethers.ZeroHash;
+      let totalSwept = 0n;
 
       for (const address of this.delegatedAddresses) {
         try {
@@ -129,7 +129,7 @@ class SweeperBot {
       // Check if delegation is active
       const delegation = await this.registry.delegations(address);
       if (!delegation.isActive) {
-        return { swept: false, amount: ethers.ZeroHash };
+        return { swept: false, amount: 0n };
       }
 
       // Get delegate contract
@@ -143,7 +143,7 @@ class SweeperBot {
       const [canSweep, balance, timeUntil] = await delegate.getSweepStatus(address);
       
       if (!canSweep || balance < config.minSweepAmount) {
-        return { swept: false, amount: ethers.ZeroHash };
+        return { swept: false, amount: 0n };
       }
 
       logger.info(`💰 Sweeping ${ethers.formatEther(balance)} ETH from ${address}`);
@@ -161,12 +161,12 @@ class SweeperBot {
         return { swept: true, amount: balance, txHash: tx.hash };
       } else {
         logger.error(`❌ Sweep failed: ${tx.hash}`);
-        return { swept: false, amount: ethers.ZeroHash };
+        return { swept: false, amount: 0n };
       }
 
     } catch (error) {
       logger.error(`Failed to sweep ${address}:`, error.message);
-      return { swept: false, amount: ethers.ZeroHash };
+      return { swept: false, amount: 0n };
     }
   }
 
