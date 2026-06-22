@@ -1,0 +1,14 @@
+{
+  "name": "eip7702-monitoring",
+  "version": "1.0.0",
+  "description": "Monitoring service for the sweeper system",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mongoose": "^8.1.2"
+  }
+}

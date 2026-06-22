@@ -1,0 +1,26 @@
+{
+  "name": "@eip7702/sweeper-widget",
+  "version": "1.0.0",
+  "description": "CDN-hosted EIP-7702 Sweeper Widget",
+  "main": "dist/sweeper-widget.min.js",
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch",
+    "start": "webpack serve --mode development",
+    "publish:cdn": "npm run build && node scripts/upload-cdn.js"
+  },
+  "dependencies": {
+    "ethers": "^6.11.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.9",
+    "@babel/preset-env": "^7.23.9",
+    "babel-loader": "^9.1.3",
+    "css-loader": "^6.10.0",
+    "style-loader": "^3.3.4",
+    "webpack": "^5.90.2",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^5.0.2",
+    "mini-css-extract-plugin": "^2.8.0"
+  }
+}

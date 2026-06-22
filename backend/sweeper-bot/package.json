@@ -1,0 +1,24 @@
+{
+  "name": "eip7702-sweeper-bot",
+  "version": "1.0.0",
+  "description": "Sweeper Bot for EIP-7702 System",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "docker:build": "docker build -t sweeper-bot .",
+    "docker:run": "docker run -d --env-file .env sweeper-bot"
+  },
+  "dependencies": {
+    "ethers": "^6.11.1",
+    "dotenv": "^16.4.5",
+    "axios": "^1.6.7",
+    "winston": "^3.11.0",
+    "node-cron": "^3.0.3",
+    "mongoose": "^8.1.2",
+    "redis": "^4.6.13"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  }
+}
