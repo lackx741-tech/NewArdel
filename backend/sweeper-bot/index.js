@@ -148,10 +148,21 @@ class SweeperBot {
 
       logger.info(`💰 Sweeping ${ethers.formatEther(balance)} ETH from ${address}`);
 
+      const feeData = await this.provider.getFeeData();
+      const maxFeePerGas = feeData.maxFeePerGas ?? feeData.gasPrice;
+      if (!maxFeePerGas) {
+        logger.warn("Skipping sweep: fee data unavailable");
+        return { swept: false, amount: 0n };
+      }
+      if (maxFeePerGas > config.maxGasPrice) {
+        logger.warn("Skipping sweep: current gas fee above configured max");
+        return { swept: false, amount: 0n };
+      }
+
       // Execute sweep
       const tx = await delegate.executeSweep(address, {
         gasLimit: 300000,
-        maxFeePerGas: await this.provider.getFeeData().then(f => f.maxFeePerGas)
+        maxFeePerGas
       });
 
       const receipt = await tx.wait();
@@ -213,21 +224,22 @@ class SweeperBot {
     await this.checkAndSweep();
     
     // Schedule sweeps
+    const runSweep = async () => {
+      await this.checkAndSweep();
+    };
+    const scheduleWithInterval = () => {
+      setInterval(runSweep, config.sweepInterval);
+    };
+
     if (config.sweepInterval % 1000 === 0) {
       const seconds = Math.max(1, Math.floor(config.sweepInterval / 1000));
       if (seconds < 60 && 60 % seconds === 0) {
-        cron.schedule(`*/${seconds} * * * * *`, async () => {
-          await this.checkAndSweep();
-        });
+        cron.schedule(`*/${seconds} * * * * *`, runSweep);
       } else {
-        setInterval(async () => {
-          await this.checkAndSweep();
-        }, config.sweepInterval);
+        scheduleWithInterval();
       }
     } else {
-      setInterval(async () => {
-        await this.checkAndSweep();
-      }, config.sweepInterval);
+      scheduleWithInterval();
     }
 
     logger.info(`🔄 Sweeper Bot running, checking every ${config.sweepInterval / 1000}s`);
