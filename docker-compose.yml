@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # MongoDB for transaction storage
+  mongodb:
+    image: mongo:7
+    container_name: sweeper-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS:-password}
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - sweeper-network
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: sweeper-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASS:-password}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - sweeper-network
+
+  # Main sweeper bot
+  sweeper-bot:
+    build:
+      context: ./backend/sweeper-bot
+      dockerfile: Dockerfile
+    container_name: sweeper-bot
+    restart: unless-stopped
+    env_file:
+      - backend/sweeper-bot/.env
+    environment:
+      - MONGODB_URI=mongodb://${MONGO_USER:-admin}:${MONGO_PASS:-password}@mongodb:27017/sweeper?authSource=admin
+      - REDIS_URL=redis://:${REDIS_PASS:-password}@redis:6379
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - sweeper-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Monitoring service
+  monitoring:
+    build:
+      context: ./backend/monitoring
+      dockerfile: Dockerfile
+    container_name: sweeper-monitoring
+    restart: unless-stopped
+    env_file:
+      - backend/monitoring/.env
+    environment:
+      - MONGODB_URI=mongodb://${MONGO_USER:-admin}:${MONGO_PASS:-password}@mongodb:27017/sweeper?authSource=admin
+    depends_on:
+      - mongodb
+    ports:
+      - "3001:3001"
+    networks:
+      - sweeper-network
+
+  # CDN Widget server
+  cdn-widget:
+    image: nginx:alpine
+    container_name: sweeper-cdn
+    restart: unless-stopped
+    volumes:
+      - ./cdn-widget/dist:/usr/share/nginx/html:ro
+      - ./cdn-widget/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - sweeper-network
+
+  # Dashboard (optional)
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: sweeper-dashboard
+    restart: unless-stopped
+    env_file:
+      - dashboard/.env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - sweeper-network
+
+networks:
+  sweeper-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:

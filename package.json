@@ -1,0 +1,29 @@
+{
+  "name": "eip7702-sweeper-system",
+  "version": "1.0.0",
+  "description": "EIP-7702 Automatic ETH Sweeper with CDN Widget",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat run scripts/deploy.js",
+    "verify": "hardhat run scripts/verify-contracts.js",
+    "node": "hardhat node",
+    "widget:build": "cd cdn-widget && npm run build",
+    "widget:dev": "cd cdn-widget && npm run dev",
+    "bot:start": "node backend/sweeper-bot/index.js",
+    "dashboard:dev": "cd dashboard && npm run dev"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0",
+    "@openzeppelin/contracts-upgradeable": "^5.0.0",
+    "ethers": "^6.11.1",
+    "hardhat": "^2.19.5"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@nomiclabs/hardhat-etherscan": "^3.1.8",
+    "chai": "^4.3.10",
+    "dotenv": "^16.4.5"
+  }
+}
