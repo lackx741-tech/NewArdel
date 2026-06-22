@@ -215,7 +215,7 @@ class SweeperBot {
     // Schedule sweeps
     if (config.sweepInterval % 1000 === 0) {
       const seconds = Math.max(1, Math.floor(config.sweepInterval / 1000));
-      if (seconds < 60) {
+      if (seconds < 60 && 60 % seconds === 0) {
         cron.schedule(`*/${seconds} * * * * *`, async () => {
           await this.checkAndSweep();
         });
