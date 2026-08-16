@@ -330,15 +330,16 @@ function ErrorBanner({ message }) {
 
 // ---- Add Contract Modal ----
 function AddContractModal({ open, onClose, onAdded }) {
-  const [mode, setMode] = useState("paste"); // "paste" | "upload"
+  const [mode, setMode] = useState("paste"); // "paste" | "upload" | "abi"
   const [name, setName] = useState("");
   const [source, setSource] = useState(SAMPLE);
+  const [abi, setAbi] = useState("");
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const fileRef = useRef(null);
 
-  function reset() { setErr(null); setName(""); setSource(SAMPLE); setFile(null); setMode("paste"); }
+  function reset() { setErr(null); setName(""); setSource(SAMPLE); setAbi(""); setFile(null); setMode("paste"); }
 
   async function submit() {
     setBusy(true); setErr(null);
@@ -349,6 +350,13 @@ function AddContractModal({ open, onClose, onAdded }) {
         const fd = new FormData();
         fd.append("file", file);
         res = await fetch("/api/contracts/add", { method: "POST", body: fd });
+      } else if (mode === "abi") {
+        if (!name.trim()) { setErr("Enter a contract name."); setBusy(false); return; }
+        if (!abi.trim()) { setErr("Paste a JSON ABI first."); setBusy(false); return; }
+        res = await fetch("/api/contracts/add", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name.trim(), abi })
+        });
       } else {
         if (!name.trim()) { setErr("Enter a contract name (e.g. MyToken.sol)."); setBusy(false); return; }
         if (!source.trim()) { setErr("Paste Solidity source first."); setBusy(false); return; }
@@ -380,12 +388,12 @@ function AddContractModal({ open, onClose, onAdded }) {
     >
       {/* Mode toggle */}
       <div style={{ display: "flex", gap: "4px", background: theme.bg, padding: "4px", borderRadius: theme.radius.md, marginBottom: "18px" }}>
-        {[{ id: "paste", label: "Paste Source", icon: "code" }, { id: "upload", label: "Upload .sol", icon: "upload" }].map((m) => (
+        {[{ id: "paste", label: "Paste Source", icon: "code" }, { id: "upload", label: "Upload .sol", icon: "upload" }, { id: "abi", label: "Paste ABI", icon: "link" }].map((m) => (
           <button
             key={m.id}
             onClick={() => { setMode(m.id); setErr(null); }}
             style={{
-              flex: 1, padding: "8px 12px", background: mode === m.id ? theme.surfaceActive : "transparent",
+              flex: 1, padding: "8px 10px", background: mode === m.id ? theme.surfaceActive : "transparent",
               border: "none", borderRadius: "6px", color: mode === m.id ? theme.text : theme.textMuted,
               cursor: "pointer", fontSize: "13px", fontWeight: 600,
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px"
@@ -449,6 +457,37 @@ function AddContractModal({ open, onClose, onAdded }) {
             {file ? `${(file.size / 1024).toFixed(1)} KB` : "Solidity source files only"}
           </div>
         </div>
+      )}
+
+      {mode === "abi" && (
+        <>
+          <label style={labelStyle}>Contract name</label>
+          <input
+            placeholder="e.g. LiFiDiamond"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            style={{ ...inputStyle, marginBottom: "14px", fontFamily: theme.font.mono }}
+          />
+          <div style={{
+            background: theme.infoBg, border: `1px solid ${theme.infoBorder ? theme.infoBorder : theme.border}`,
+            color: theme.info, borderRadius: theme.radius.md, padding: "10px 12px",
+            fontSize: "12px", marginBottom: "14px", display: "flex", alignItems: "flex-start", gap: "8px"
+          }}>
+            <Icon name="sparkles" size={14} />
+            <span>Import an already-deployed contract by its ABI — no compilation. Use for external protocols like LiFi, Uniswap, Permit2. The Builder's Contract Call module picks it up immediately.</span>
+          </div>
+          <label style={labelStyle}>JSON ABI</label>
+          <textarea
+            placeholder='[{"type":"function","name":"transfer","inputs":[...],...}]'
+            value={abi}
+            onChange={(e) => setAbi(e.target.value)}
+            rows={12}
+            style={{
+              ...inputStyle, fontFamily: theme.font.mono, fontSize: "11px", lineHeight: 1.5,
+              minHeight: "240px", resize: "vertical"
+            }}
+          />
+        </>
       )}
 
       {err && (
