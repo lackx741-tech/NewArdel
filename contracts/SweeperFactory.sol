@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.26;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
@@ -62,14 +62,14 @@ contract SweeperFactory is Ownable {
         uint256 minSweepAmount,
         uint256 maxGasPrice,
         uint256 sweepCooldown
-    ) external returns (address delegate) {
+    ) external returns (address payable delegate) {
         require(
             ownerDelegates[msg.sender] == address(0),
             "Factory: already deployed"
         );
         
         // Clone implementation
-        delegate = implementation.clone();
+        delegate = payable(implementation.clone());
         
         // Initialize the clone
         SweeperDelegate(delegate).initialize(

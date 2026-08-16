@@ -12,3 +12,8 @@ build/
 .env.local
 .next/
 dashboard/out/
+.bundle-tmp/
+dashboard/node_modules/
+widget-modules/abis.js
+widget-modules/contracts.json
+widget-modules/contracts.registry.js
