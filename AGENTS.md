@@ -14,9 +14,14 @@ deployment — the user reviews everything.
 - **Modules**: `dashboard/src/composer/modules.js` is the module catalog. Each module has fields + runtimeDeps. The `contractCall` module is the generic escape hatch — it resolves any auto-discovered contract's ABI at runtime.
 
 ## How to add a smart contract (multiple ways)
-1. **Via UI**: Contracts page → "Add Contract" → paste Solidity source OR upload `.sol` → it compiles and joins the registry. (`POST /api/contracts/add`)
-2. **Via filesystem**: drop a `.sol` in `contracts/`, run `npx hardhat compile && node widget-modules/generate-abis.js`, then click "Regenerate" in the UI (`POST /api/contracts/regenerate`).
-3. Contracts appear immediately in the Builder's "Contract Call" module dropdown, with the function dropdown auto-populated from the ABI.
+1. **Via UI — Paste Source**: Contracts page → "Add Contract" → Paste Source tab → paste Solidity → compiles + joins registry. (`POST /api/contracts/add` with `{name, source}`)
+2. **Via UI — Upload .sol**: same modal → Upload tab → drag-drop a `.sol` file. (`multipart/form-data`)
+3. **Via UI — Paste ABI**: same modal → Paste ABI tab → paste a JSON ABI for an already-deployed external contract (e.g. LiFiDiamond, Uniswap router, Permit2). No compilation — merges directly into `abis.js` + `contracts.json`. (`POST /api/contracts/add` with `{name, abi}`) — use this for Foundry/non-Hardhat repos or already-deployed protocols.
+4. **Via filesystem**: drop a `.sol` in `contracts/`, run `npx hardhat compile && node widget-modules/generate-abis.js`, then "Regenerate" in the UI (`POST /api/contracts/regenerate`).
+5. Contracts appear immediately in the Builder's "Contract Call" module dropdown, with the function dropdown auto-populated from the ABI.
+
+### External repos (Foundry / non-Hardhat like LiFi contracts)
+Do NOT vendor their source into `contracts/` — it won't compile under Hardhat (different remappings, submodules, EIP-2535 diamond libs). Instead use the **Paste ABI** path: grab the protocol's published ABI (from their `lifi-contract-types` repo, etherscan, or compile once in their toolchain) and register it by ABI. Then call the deployed diamond/facets from your widget's Contract Call module with the real deployed address.
 
 ## Design system
 - `dashboard/src/components/theme.js` — tokens (colors, radii, shadows, spacing), style helpers (`btn`, `cardStyle`, `inputStyle`, `badge`, `labelStyle`).
