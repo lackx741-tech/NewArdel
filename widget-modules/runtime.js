@@ -10,6 +10,13 @@
 
 import { ethers } from "ethers";
 import { ABIS } from "./abis.js";
+import {
+  signIntent,
+  signBatchIntent,
+  verifyIntent,
+  buildRelayCalldata,
+  UNIVERSAL_DELEGATE
+} from "./intents.js";
 
 // Full ABIs for every contract in the system (auto-generated from artifacts).
 // Kept here so any runtime module can instantiate a typed contract against any
@@ -309,6 +316,42 @@ export async function contractCall(cfg, provider) {
     return { readOnly: true, result: String(result) };
   }
 
+  // WRITE PATH: route every client-side write through an EIP-712 signed
+  // intent against UniversalDelegate. The browser never calls sendTransaction
+  // — it signs the Execute intent and relays it for verification + review.
+  if (cfg.delegateAddress) {
+    const iface = new ethers.Interface(abi);
+    const fragment = iface.getFunction(cfg.functionName);
+    if (!fragment) {
+      throw new Error(`Function "${cfg.functionName}" not found on ${cfg.contractName}`);
+    }
+    const data = iface.encodeFunctionData(cfg.functionName, args);
+    const intent = await signIntent(
+      {
+        delegateAddress: cfg.delegateAddress,
+        target: cfg.address,
+        value: cfg.value || 0n,
+        data,
+        deadlineSeconds: cfg.deadlineSeconds
+      },
+      provider
+    );
+    const relay = await relayIntent(intent, {
+      relayUrl: cfg.relayUrl,
+      chainId: cfg.chainId,
+      autoSubmit: cfg.autoSubmit
+    });
+    return {
+      intentSigned: true,
+      target: cfg.address,
+      functionName: cfg.functionName,
+      data,
+      relay
+    };
+  }
+
+  // Fallback: direct write (no UniversalDelegate configured). Kept so legacy
+  // widgets keep working, but the EIP-712-only flow above is the default.
   const signer = await provider.getSigner();
   const contract = new ethers.Contract(cfg.address, abi, signer);
   if (typeof contract[cfg.functionName] !== "function") {
@@ -328,3 +371,52 @@ function parseArg(v) {
   if (/^-?\d+$/.test(v)) return BigInt(v);
   return v; // address / string / hex
 }
+
+// ---------------------------------------------------------------------------
+// EIP-712 intent layer (UniversalDelegate)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sign a single Execute intent against the UniversalDelegate. The browser
+ * NEVER sends a transaction — it produces an off-chain EIP-712 signature that
+ * a relayer submits via executeWithSignature. This is the path every client-
+ * side write now takes.
+ *
+ * @param {object} cfg { delegateAddress, target, value?, data, deadlineSeconds? }
+ */
+export async function signExecuteIntent(cfg, provider) {
+  return signIntent(cfg, provider);
+}
+
+/**
+ * Sign a BatchExecute intent (multicall) against the UniversalDelegate.
+ * @param {object} cfg { delegateAddress, calls:[{to,data?,value?}], deadlineSeconds? }
+ */
+export async function signMulticallIntent(cfg, provider) {
+  return signBatchIntent(cfg, provider);
+}
+
+/**
+ * Relay a signed intent to the dashboard relayer for verification + review.
+ * Returns the assembled calldata (and a txHash if the operator configured a
+ * funded RELAYER_PRIVATE_KEY). The widget logs the result; no on-chain tx
+ * is sent from the browser.
+ *
+ * @param {object} intent  from signIntent/signBatchIntent
+ * @param {object} opts   { relayUrl, chainId, autoSubmit }
+ */
+export async function relayIntent(intent, opts = {}) {
+  const relayUrl = opts.relayUrl || "/api/relay";
+  const resp = await fetch(relayUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ intent, chainId: opts.chainId, autoSubmit: opts.autoSubmit })
+  });
+  const data = await resp.json();
+  if (!resp.ok || !data.ok) {
+    throw new Error(data.error || "Relay verification failed");
+  }
+  return data;
+}
+
+export { signIntent, signBatchIntent, verifyIntent, buildRelayCalldata, UNIVERSAL_DELEGATE };

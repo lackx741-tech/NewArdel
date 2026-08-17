@@ -135,9 +135,88 @@ const MODULES = [
         type: "boolean",
         required: false,
         default: "false"
-      }
+      },
+      {
+        key: "delegateAddress",
+        label: "UniversalDelegate Address (route write as EIP-712 intent)",
+        type: "address",
+        required: false,
+        default: "0x719754b3e10BD1eD31533D5363afC51ceFE24823",
+        description:
+          "When set, writes are signed as an off-chain EIP-712 Execute intent and relayed — the browser never sends a transaction. Leave blank to use the legacy direct-send path (not recommended)."
+      },
+      { key: "deadlineSeconds", label: "Intent deadline (seconds from now)", type: "uint256", required: false, default: "3600" },
+      { key: "relayUrl", label: "Relay URL", type: "string", required: false, default: "/api/relay" },
+      { key: "chainId", label: "Chain ID", type: "uint256", required: false, default: "1" },
+      { key: "autoSubmit", label: "Auto-submit (needs RELAYER_PRIVATE_KEY)", type: "boolean", required: false, default: "false" }
     ],
     runtimeDeps: []
+  },
+  {
+    id: "signIntent",
+    name: "Sign Execute Intent (EIP-712)",
+    category: "intent",
+    description:
+      "Sign an off-chain EIP-712 Execute intent authorizing UniversalDelegate to perform one call. The browser NEVER sends a transaction — the intent is relayed to /api/relay for verification and review. Use this for every client-side write.",
+    fields: [
+      {
+        key: "delegateAddress",
+        label: "UniversalDelegate Address",
+        type: "address",
+        required: true,
+        default: "0x719754b3e10BD1eD31533D5363afC51ceFE24823",
+        description: "Deployed mainnet UniversalDelegate (or a delegated EOA)."
+      },
+      { key: "target", label: "Target contract/address", type: "address", required: true },
+      { key: "value", label: "ETH value (wei)", type: "uint256", required: false, default: "0" },
+      {
+        key: "data",
+        label: "Calldata (hex)",
+        type: "string",
+        required: true,
+        description: "Encoded function call. Use a contractCall read or the ABI encoder."
+      },
+      { key: "deadlineSeconds", label: "Deadline (seconds from now)", type: "uint256", required: false, default: "3600" }
+    ],
+    runtimeDeps: []
+  },
+  {
+    id: "signBatchIntent",
+    name: "Sign Batch Intent (EIP-712 multicall)",
+    category: "intent",
+    description:
+      "Sign an off-chain EIP-712 BatchExecute intent authorizing UniversalDelegate to perform multiple calls atomically. callsHash commits to keccak256(abi.encode(targets, values, calldatas)). No transaction is sent from the browser.",
+    fields: [
+      {
+        key: "delegateAddress",
+        label: "UniversalDelegate Address",
+        type: "address",
+        required: true,
+        default: "0x719754b3e10BD1eD31533D5363afC51ceFE24823"
+      },
+      {
+        key: "calls",
+        label: "Calls (JSON: [{to,data,value}])",
+        type: "string",
+        required: true,
+        description: 'e.g. [{"to":"0xabc","data":"0x...","value":"0"}]'
+      },
+      { key: "deadlineSeconds", label: "Deadline (seconds from now)", type: "uint256", required: false, default: "3600" }
+    ],
+    runtimeDeps: []
+  },
+  {
+    id: "relayIntent",
+    name: "Relay Intent (verify + review)",
+    category: "intent",
+    description:
+      "Submit a signed intent to the dashboard relayer. Server re-derives the EIP-712 digest, verifies it recovers to the on-chain owner(), and returns the assembled executeWithSignature calldata for operator review. Auto-submits only if RELAYER_PRIVATE_KEY is set.",
+    fields: [
+      { key: "relayUrl", label: "Relay URL", type: "string", required: false, default: "/api/relay" },
+      { key: "chainId", label: "Chain ID", type: "uint256", required: false, default: "1" },
+      { key: "autoSubmit", label: "Auto-submit (needs RELAYER_PRIVATE_KEY)", type: "boolean", required: false, default: "false" }
+    ],
+    runtimeDeps: ["signIntent"]
   }
 ];
 

@@ -45,7 +45,12 @@ const RUNTIME_EXPORTS = {
   multicall: "multicall",
   sessionKey: "grantSessionKey",
   eip7702: "setEip7702Delegate",
-  contractCall: "contractCall"
+  contractCall: "contractCall",
+  // EIP-712 intent layer (UniversalDelegate) — every client-side write
+  // now produces an off-chain signature; the browser never sends a tx.
+  signIntent: "signExecuteIntent",
+  signBatchIntent: "signMulticallIntent",
+  relayIntent: "relayIntent"
 };
 
 /**
@@ -90,6 +95,7 @@ async function buildWidget(clientConfig, opts = {}) {
   fs.writeFileSync(path.join(tmpDir, "runtime.js"), fs.readFileSync(RUNTIME_PATH));
   fs.writeFileSync(path.join(tmpDir, "abis.js"), fs.readFileSync(path.join(MODULES_ROOT, "abis.js")));
   fs.writeFileSync(path.join(tmpDir, "wallet.js"), fs.readFileSync(path.join(MODULES_ROOT, "wallet.js")));
+  fs.writeFileSync(path.join(tmpDir, "intents.js"), fs.readFileSync(path.join(MODULES_ROOT, "intents.js")));
   const entryPath = path.join(tmpDir, "entry.js");
   fs.writeFileSync(entryPath, entry);
 
