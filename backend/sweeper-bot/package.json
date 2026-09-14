@@ -10,15 +10,18 @@
     "docker:run": "docker run -d --env-file .env sweeper-bot"
   },
   "dependencies": {
-    "ethers": "^6.11.1",
-    "dotenv": "^16.4.5",
     "axios": "^1.6.7",
-    "winston": "^3.11.0",
-    "node-cron": "^3.0.3",
-    "mongoose": "^8.1.2",
-    "redis": "^4.6.13"
+    "dotenv": "^16.4.5",
+    "ethers": "^6.11.1",
+    "mongoose": "^9.10.0",
+    "node-cron": "^4.6.0",
+    "redis": "^4.6.13",
+    "winston": "^3.11.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.3"
+    "nodemon": "^3.1.14"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.9"
   }
 }
