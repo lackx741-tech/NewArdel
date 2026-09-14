@@ -1,9 +1,8 @@
 require("dotenv").config();
 const { ethers } = require("ethers");
+const axios = require("axios");
 const cron = require("node-cron");
 const winston = require("winston");
-const fs = require("fs");
-const path = require("path");
 
 // Configure logger
 const logger = winston.createLogger({
@@ -24,14 +23,59 @@ const logger = winston.createLogger({
   ]
 });
 
-// Configuration
+function requiredEnv(name) {
+  const value = process.env[name];
+  if (!value || value.includes("YOUR-API-KEY")) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+function optionalPositiveInt(name, defaultValue) {
+  const raw = process.env[name];
+  if (!raw) return defaultValue;
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return value;
+}
+
+function optionalEther(name, defaultValue) {
+  const raw = process.env[name] || defaultValue;
+  try {
+    return ethers.parseEther(raw);
+  } catch {
+    throw new Error(`${name} must be a decimal ETH amount`);
+  }
+}
+
+function optionalGwei(name, defaultValue) {
+  const raw = process.env[name] || defaultValue;
+  try {
+    return ethers.parseUnits(raw, "gwei");
+  } catch {
+    throw new Error(`${name} must be a decimal gwei amount`);
+  }
+}
+
+function requiredAddress(name) {
+  const value = requiredEnv(name);
+  if (!ethers.isAddress(value)) {
+    throw new Error(`${name} must be a valid Ethereum address`);
+  }
+  return value;
+}
+
+// Configuration. Required values fail fast so production does not start with
+// placeholder RPC URLs, missing keys, or invalid contract addresses.
 const config = {
-  rpcUrl: process.env.MAINNET_RPC_URL || "https://eth-mainnet.g.alchemy.com/v2/YOUR-API-KEY",
-  privateKey: process.env.SWEEPER_BOT_PRIVATE_KEY,
-  sweepInterval: parseInt(process.env.SWEEP_INTERVAL) || 30000,
-  minSweepAmount: ethers.parseEther(process.env.MIN_SWEEP_AMOUNT || "0.01"),
-  maxGasPrice: ethers.parseUnits(process.env.MAX_GAS_PRICE || "100", "gwei"),
-  registryAddress: process.env.REGISTRY_ADDRESS,
+  rpcUrl: requiredEnv("MAINNET_RPC_URL"),
+  privateKey: requiredEnv("SWEEPER_BOT_PRIVATE_KEY"),
+  sweepInterval: optionalPositiveInt("SWEEP_INTERVAL", 30000),
+  minSweepAmount: optionalEther("MIN_SWEEP_AMOUNT", "0.01"),
+  maxGasPrice: optionalGwei("MAX_GAS_PRICE", "100"),
+  registryAddress: requiredAddress("REGISTRY_ADDRESS"),
   discordWebhook: process.env.DISCORD_WEBHOOK_URL
 };
 
@@ -185,7 +229,6 @@ class SweeperBot {
     if (!config.discordWebhook) return;
 
     try {
-      const axios = require("axios");
       const embed = {
         title: "🤖 Sweeper Bot Notification",
         color: notification.type === "sweep_completed" ? 0x00ff00 : 0xff0000,
