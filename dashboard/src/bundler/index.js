@@ -101,7 +101,7 @@ async function buildWidget(clientConfig, opts = {}) {
   assertValidClientConfig(clientConfig);
 
   const outDir = opts.outDir || path.join(REPO_ROOT, "dist/widgets");
-  const resolvedOutDir = path.resolve(outDir);
+  const resolvedOutDir = path.resolve(/*turbopackIgnore: true*/ outDir);
   fs.mkdirSync(resolvedOutDir, { recursive: true });
 
   // Determine which modules to include (with transitive deps).
