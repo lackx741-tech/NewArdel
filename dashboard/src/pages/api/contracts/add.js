@@ -5,10 +5,11 @@
  * Accepts:
  *   - multipart/form-data with a `file` field (.sol file)
  *   - application/json with { name, source } where source is Solidity text
+ *   - application/json with { name, abi } where abi is a JSON ABI
  *
- * Writes the file under contracts/, compiles via Hardhat, regenerates ABIs,
- * and returns the discovery result (which contracts were found) plus any
- * compile errors. Does NOT deploy — this is ABI/library management only.
+ * Writes Solidity files under contracts/ or ABI imports under
+ * widget-modules/abi-imports.json, then regenerates ABIs. Does NOT deploy —
+ * this is ABI/library management only.
  */
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -18,10 +19,19 @@ import path from "path";
 const execAsync = promisify(exec);
 const REPO_ROOT = path.resolve(process.cwd(), "..");
 const CONTRACTS_DIR = path.join(REPO_ROOT, "contracts");
+const WIDGET_MODULES_DIR = path.join(REPO_ROOT, "widget-modules");
+const ABI_IMPORTS_PATH = path.join(WIDGET_MODULES_DIR, "abi-imports.json");
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 // Disable Next.js body parsing for multipart. We read the raw body manually
 // so we can parse multipart/form-data without an extra dependency.
 export const config = { api: { bodyParser: false } };
+
+function requestError(message, statusCode = 400) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
+}
 
 function parseMultipart(buf, boundary) {
   const parts = {};
@@ -53,6 +63,9 @@ function parseMultipart(buf, boundary) {
 }
 
 function sanitizeFilename(name) {
+  if (typeof name !== "string") {
+    throw requestError("File name must be a string");
+  }
   // Keep it safe: alnum, dash, underscore, single .sol extension.
   let n = name.replace(/[^a-zA-Z0-9._-]/g, "");
   if (!n.endsWith(".sol")) n += ".sol";
@@ -61,17 +74,48 @@ function sanitizeFilename(name) {
   return n;
 }
 
+function sanitizeContractName(name) {
+  const safeName = sanitizeFilename(name).replace(/\.sol$/, "");
+  if (!/^[A-Za-z_][A-Za-z0-9_-]{0,63}$/.test(safeName)) {
+    throw new Error("Contract name must start with a letter or underscore and contain only letters, numbers, '_' or '-'");
+  }
+  return safeName;
+}
+
 function safeWrite(filename, content) {
   const safe = sanitizeFilename(filename);
+  const baseName = safe.replace(/\.sol$/, "");
+  if (!/^[A-Za-z_][A-Za-z0-9._-]{0,127}$/.test(baseName)) {
+    throw requestError("Solidity file name must start with a letter or underscore and contain only letters, numbers, '.', '_' or '-'");
+  }
   // Ensure the contracts dir exists (Hardhat normally has it).
   fs.mkdirSync(CONTRACTS_DIR, { recursive: true });
-  const target = path.join(CONTRACTS_DIR, safe);
+  const target = path.resolve(CONTRACTS_DIR, safe);
   // Final guard: target must resolve under CONTRACTS_DIR.
-  if (!target.startsWith(path.resolve(CONTRACTS_DIR))) {
+  if (!target.startsWith(path.resolve(CONTRACTS_DIR) + path.sep)) {
     throw new Error("Invalid file path");
   }
   fs.writeFileSync(target, content);
   return { safe, target };
+}
+
+async function readRequestBody(req) {
+  const chunks = [];
+  let total = 0;
+  for await (const c of req) {
+    total += c.length;
+    if (total > MAX_BODY_BYTES) {
+      throw requestError("Request body too large", 413);
+    }
+    chunks.push(c);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function regenerateRegistry() {
+  return execAsync("node widget-modules/generate-abis.js", {
+    cwd: REPO_ROOT, maxBuffer: 10 * 1024 * 1024, timeout: 30000
+  }).catch((e) => { throw new Error("ABI regeneration failed: " + (e.stderr || e.message)); });
 }
 
 export default async function handler(req, res) {
@@ -84,9 +128,7 @@ export default async function handler(req, res) {
 
     const contentType = req.headers["content-type"] || "";
     if (contentType.includes("multipart/form-data")) {
-      const chunks = [];
-      for await (const c of req) chunks.push(c);
-      const buf = Buffer.concat(chunks);
+      const buf = await readRequestBody(req);
       const boundary = (contentType.match(/boundary=(.+)/) || [])[1];
       if (!boundary) return res.status(400).json({ error: "No multipart boundary" });
       const parts = parseMultipart(buf, boundary);
@@ -112,24 +154,28 @@ export default async function handler(req, res) {
       }
     } else {
       // JSON body
-      const chunks = [];
-      for await (const c of req) chunks.push(c);
-      const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
+      let body;
+      try {
+        body = JSON.parse((await readRequestBody(req)).toString() || "{}");
+      } catch (e) {
+        if (e.statusCode) throw e;
+        return res.status(400).json({ error: "Request body is not valid JSON" });
+      }
       filename = body.name;
       source = body.source;
       abi = body.abi;
     }
 
-    if (!filename) {
+    if (!filename || typeof filename !== "string") {
       return res.status(400).json({ error: "A 'name' is required" });
     }
 
     // ---- ABI-only registration path (no compile) ----
     if (abi) {
-      return registerAbi(req, res, filename, abi);
+      return registerAbi(res, filename, abi);
     }
 
-    if (!source) {
+    if (!source || typeof source !== "string") {
       return res.status(400).json({ error: "Either 'source' (Solidity) or 'abi' (JSON ABI) is required" });
     }
     if (!source.trim().startsWith("pragma") && !source.includes("contract") && !source.includes("interface") && !source.includes("library")) {
@@ -156,9 +202,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const { stdout: genOut } = await execAsync("node widget-modules/generate-abis.js", {
-      cwd: REPO_ROOT, maxBuffer: 10 * 1024 * 1024, timeout: 30000
-    }).catch((e) => { throw new Error("ABI regeneration failed: " + (e.stderr || e.message)); });
+    const { stdout: genOut } = await regenerateRegistry();
 
     const registryPath = path.join(REPO_ROOT, "widget-modules", "contracts.json");
     const registry = fs.existsSync(registryPath)
@@ -181,7 +225,7 @@ export default async function handler(req, res) {
       regenLog: (genOut || "").split("\n").slice(0, 20).join("\n").trim()
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(e.statusCode || 500).json({ error: e.message });
   }
 }
 
@@ -190,12 +234,18 @@ export default async function handler(req, res) {
  * Lets you call already-deployed contracts like LiFiDiamond, UniswapV3Router,
  * Permit2, etc. directly from the Builder without vendoring their source.
  *
- * Merges the ABI into abis.js (object literal) and contracts.json so the
- * Builder's Contract Call module picks it up immediately.
+ * Persists the ABI import, then regenerates abis.js, contracts.json, and
+ * contracts.registry.js so the Builder's Contract Call module picks it up
+ * immediately and future regenerations preserve it.
  */
-function registerAbi(req, res, name, abiInput) {
+async function registerAbi(res, name, abiInput) {
   try {
-    const safeName = sanitizeFilename(name).replace(/\.sol$/, "");
+    let safeName;
+    try {
+      safeName = sanitizeContractName(name);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
     // abiInput may be: a JSON string, a plain array, or { abi: [...] }.
     let abiArr;
     if (typeof abiInput === "string") {
@@ -213,52 +263,59 @@ function registerAbi(req, res, name, abiInput) {
     if (!Array.isArray(abiArr) || abiArr.length === 0) {
       return res.status(400).json({ error: "ABI must be a non-empty JSON array" });
     }
-    const functions = abiArr.filter((e) => e.type === "function");
-    const events = abiArr.filter((e) => e.type === "event");
+    if (!abiArr.every((e) => e && typeof e === "object" && typeof e.type === "string")) {
+      return res.status(400).json({ error: "Each ABI entry must be an object with a type field" });
+    }
 
-    // Merge ABI into abis.js (object-literal form: export const ABIS = { ... };).
-    const abisPath = path.join(REPO_ROOT, "widget-modules", "abis.js");
-    let abisObj = {};
-    if (fs.existsSync(abisPath)) {
-      const abisSrc = fs.readFileSync(abisPath, "utf8");
-      const m = abisSrc.match(/export const ABIS\s*=\s*(\{[\s\S]*\});\s*\nexport default ABIS/);
-      if (m) {
-        try { abisObj = JSON.parse(m[1]); } catch {}
+    const registryPath = path.join(REPO_ROOT, "widget-modules", "contracts.json");
+    if (fs.existsSync(registryPath)) {
+      const registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+      const existing = (registry.contracts || []).find((c) => c.name === safeName);
+      if (existing && !String(existing.source || "").startsWith("external/")) {
+        return res.status(400).json({ error: `Contract "${safeName}" already exists as a compiled contract` });
       }
     }
-    abisObj[safeName] = abiArr;
-    const newSrc =
-      "/**\n * AUTO-GENERATED from Hardhat artifacts + ABI imports. Do not edit by hand.\n" +
-      " * Regenerate with: node widget-modules/generate-abis.js\n */\n" +
-      "export const ABIS = " + JSON.stringify(abisObj, null, 2) + ";\n\nexport default ABIS;\n";
-    fs.writeFileSync(abisPath, newSrc);
 
-    // Merge entry into contracts.json registry.
-    const registryPath = path.join(REPO_ROOT, "widget-modules", "contracts.json");
-    const registry = fs.existsSync(registryPath)
-      ? JSON.parse(fs.readFileSync(registryPath, "utf8"))
-      : { contracts: [], contractCount: 0 };
+    const previousImports = fs.existsSync(ABI_IMPORTS_PATH)
+      ? fs.readFileSync(ABI_IMPORTS_PATH, "utf8")
+      : null;
+    const importsDoc = previousImports
+      ? JSON.parse(previousImports)
+      : { contracts: [] };
+    if (!Array.isArray(importsDoc.contracts)) importsDoc.contracts = [];
 
     const entry = {
       name: safeName,
       source: `external/${safeName}.sol`,
       isDeployable: true,
       isInterface: false,
-      abi: abiArr,
-      functions: functions.map((f) => ({
-        name: f.name,
-        inputs: f.inputs || [],
-        outputs: f.outputs || [],
-        stateMutability: f.stateMutability || "nonpayable"
-      })),
-      events: events.map((e) => ({ name: e.name, inputs: e.inputs || [] }))
+      abi: abiArr
     };
 
-    const idx = registry.contracts.findIndex((c) => c.name === safeName);
-    if (idx >= 0) registry.contracts[idx] = entry;
-    else registry.contracts.push(entry);
-    registry.contractCount = registry.contracts.length;
-    fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2));
+    const idx = importsDoc.contracts.findIndex((c) => c.name === safeName);
+    if (idx >= 0) importsDoc.contracts[idx] = entry;
+    else importsDoc.contracts.push(entry);
+    importsDoc.contracts.sort((a, b) => a.name.localeCompare(b.name));
+
+    fs.mkdirSync(WIDGET_MODULES_DIR, { recursive: true });
+    fs.writeFileSync(ABI_IMPORTS_PATH, JSON.stringify(importsDoc, null, 2) + "\n");
+
+    let genOut = "";
+    try {
+      const result = await regenerateRegistry();
+      genOut = result.stdout || "";
+    } catch (e) {
+      if (previousImports === null) {
+        try { fs.unlinkSync(ABI_IMPORTS_PATH); } catch {}
+      } else {
+        fs.writeFileSync(ABI_IMPORTS_PATH, previousImports);
+      }
+      throw e;
+    }
+
+    const registry = fs.existsSync(registryPath)
+      ? JSON.parse(fs.readFileSync(registryPath, "utf8"))
+      : { contracts: [], contractCount: 0 };
 
     res.status(200).json({
       ok: true,
@@ -273,7 +330,8 @@ function registerAbi(req, res, name, abiInput) {
         isDeployable: c.isDeployable,
         isInterface: c.isInterface,
         functions: (c.functions || []).length
-      }))
+      })),
+      regenLog: genOut.split("\n").slice(0, 20).join("\n").trim()
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

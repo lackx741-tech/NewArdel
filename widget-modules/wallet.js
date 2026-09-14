@@ -14,10 +14,6 @@ import { EthersAdapter } from "@reown/appkit-adapter-ethers";
 import { sepolia, mainnet } from "@reown/appkit/networks";
 import { ethers } from "ethers";
 
-// Default projectId — REPLACE with your own from https://cloud.reown.com.
-// This demo id is rate-limited; clients should configure their own.
-const DEFAULT_PROJECT_ID = "3fdf2df3f5c7a96c0e9b7b0c5c1c6b0d";
-
 let appkit = null;
 let adapter = null;
 let provider = null;
@@ -33,7 +29,10 @@ let provider = null;
 export function initWallet(opts = {}) {
   if (appkit) return appkit;
 
-  const projectId = opts.projectId || DEFAULT_PROJECT_ID;
+  if (!opts.projectId) {
+    throw new Error("Reown projectId is required. Configure reownProjectId before building the widget.");
+  }
+  const projectId = opts.projectId;
 
   // Build the supported networks list. Include mainnet + sepolia by default;
   // the widget's chainId config selects which is active.

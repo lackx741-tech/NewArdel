@@ -16,7 +16,7 @@ const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARTIFACTS = path.join(ROOT, "artifacts", "contracts");
-const SOURCES = path.join(ROOT, "contracts");
+const ABI_IMPORTS_PATH = path.join(__dirname, "abi-imports.json");
 
 /**
  * Walk the artifacts/contracts tree and yield every *.json (excluding .dbg).
@@ -70,6 +70,34 @@ function loadArtifact({ contractName, sourceRel, artifactPath }) {
 }
 
 /**
+ * Load ABI-only imports registered through the dashboard. These imports are a
+ * durable source of truth so they survive later Hardhat recompiles.
+ */
+function loadAbiImports() {
+  if (!fs.existsSync(ABI_IMPORTS_PATH)) return [];
+
+  const parsed = JSON.parse(fs.readFileSync(ABI_IMPORTS_PATH, "utf8"));
+  const imports = Array.isArray(parsed) ? parsed : parsed.contracts;
+  if (!Array.isArray(imports)) {
+    throw new Error("widget-modules/abi-imports.json must contain a contracts array");
+  }
+
+  return imports.map((entry) => {
+    if (!entry || typeof entry.name !== "string" || !Array.isArray(entry.abi)) {
+      throw new Error("Each ABI import must include a name and non-empty abi array");
+    }
+    return {
+      name: entry.name,
+      source: entry.source || `external/${entry.name}.sol`,
+      isInterface: Boolean(entry.isInterface),
+      isDeployable: entry.isDeployable !== false,
+      abi: entry.abi,
+      imported: true
+    };
+  });
+}
+
+/**
  * Generate the contract registry: name -> { name, source, isInterface,
  * isDeployable, functions[], events[], errors[] }.
  * Used by the dashboard to list contracts and by the widget to know what's
@@ -91,18 +119,18 @@ function summarize(meta) {
     isInterface: meta.isInterface,
     isDeployable: meta.isDeployable,
     functions: pick("function"),
-        events: meta.abi
-          .filter((e) => e.type === "event")
-          .map((e) => ({
-            name: e.name,
-            inputs: (e.inputs || []).map((i) => ({ name: i.name, type: i.type, indexed: i.indexed }))
-          })),
-        errors: meta.abi
-          .filter((e) => e.type === "error")
-          .map((e) => ({
-            name: e.name,
-            inputs: (e.inputs || []).map((i) => ({ name: i.name, type: i.type }))
-          }))
+    events: meta.abi
+      .filter((e) => e.type === "event")
+      .map((e) => ({
+        name: e.name,
+        inputs: (e.inputs || []).map((i) => ({ name: i.name, type: i.type, indexed: i.indexed }))
+      })),
+    errors: meta.abi
+      .filter((e) => e.type === "error")
+      .map((e) => ({
+        name: e.name,
+        inputs: (e.inputs || []).map((i) => ({ name: i.name, type: i.type }))
+      }))
   };
 }
 
@@ -114,7 +142,17 @@ function generate() {
     );
   }
 
-  const metas = artifacts.map(loadArtifact);
+  const metasByName = new Map();
+  for (const meta of artifacts.map(loadArtifact)) {
+    metasByName.set(meta.name, meta);
+  }
+  for (const meta of loadAbiImports()) {
+    if (metasByName.has(meta.name)) {
+      throw new Error(`ABI import "${meta.name}" conflicts with a compiled contract name`);
+    }
+    metasByName.set(meta.name, meta);
+  }
+  const metas = Array.from(metasByName.values());
 
   // ABIS module (full ABIs for the widget runtime).
   const abisMap = {};
@@ -124,8 +162,9 @@ function generate() {
  * AUTO-GENERATED from Hardhat artifacts. Do not edit by hand.
  * Regenerate with: node widget-modules/generate-abis.js
  *
- * Full ABIs for EVERY contract under contracts/ (auto-discovered).
- * To add a contract: drop the .sol in contracts/, compile, regenerate.
+ * Full ABIs for EVERY contract under contracts/ plus dashboard ABI imports.
+ * To add a Solidity contract: drop the .sol in contracts/, compile, regenerate.
+ * To add an external deployed contract: import its ABI from the dashboard.
  */
 `;
   const abisBody = `export const ABIS = ${JSON.stringify(abisMap, null, 2)};\n\nexport default ABIS;\n`;

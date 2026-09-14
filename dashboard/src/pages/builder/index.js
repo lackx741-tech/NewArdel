@@ -99,13 +99,14 @@ export default function Builder() {
   }
 
   const contractNames = registry?.contracts?.map((c) => c.name) || [];
+  const canBuild = client.process.length > 0 && client.reownProjectId.trim().length > 0;
 
   return (
     <Shell
       title="Widget Builder"
       subtitle="Compose transaction logic from modules, configure per client, bundle to a single widget.js."
       actions={
-        <button onClick={buildWidget} disabled={building || client.process.length === 0} style={btn("primary", { disabled: building || client.process.length === 0, size: "sm" })}>
+        <button onClick={buildWidget} disabled={building || !canBuild} style={btn("primary", { disabled: building || !canBuild, size: "sm" })}>
           {building ? <Spinner size={14} color="#fff" /> : <Icon name="bolt" size={15} />}
           {building ? "Bundling…" : "Build widget.js"}
         </button>
@@ -212,7 +213,7 @@ export default function Builder() {
             <Field field={{ key: "name", label: "Display Name", type: "string", required: true }} value={client.name} onChange={(v) => updateClient("name", v)} />
             <Field field={{ key: "chainId", label: "Chain ID", type: "string", required: true }} value={client.chainId} onChange={(v) => updateClient("chainId", v)} />
             <Field field={{ key: "rpcUrl", label: "RPC URL", type: "string" }} value={client.rpcUrl} onChange={(v) => updateClient("rpcUrl", v)} />
-            <Field field={{ key: "reownProjectId", label: "Reown Project ID", type: "string", description: "Free at cloud.reown.com" }} value={client.reownProjectId} onChange={(v) => updateClient("reownProjectId", v)} last />
+            <Field field={{ key: "reownProjectId", label: "Reown Project ID", type: "string", required: true, description: "Required for production wallet connections. Free at cloud.reown.com" }} value={client.reownProjectId} onChange={(v) => updateClient("reownProjectId", v)} last />
           </div>
 
           {/* Build result */}

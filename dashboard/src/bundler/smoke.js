@@ -12,6 +12,7 @@ async function main() {
     name: "Client X Presale",
     chainId: "11155111",
     rpcUrl: "https://eth-sepolia.g.alchemy.com/v2/demo",
+    reownProjectId: "test-project-id",
     process: [
       {
         moduleId: "permit2",

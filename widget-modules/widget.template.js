@@ -31,6 +31,15 @@ const MODULES = {
 
 const CLIENT_CONFIG = /** @type {any} */ (__CLIENT_CONFIG__);
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // Initialize Reown AppKit on load (opens the proper wallet-connect modal
 // instead of relying on window.ethereum). projectId comes from the client
 // config; clients get one free at https://cloud.reown.com.
@@ -88,11 +97,12 @@ export class ComposerWidget {
 
   template() {
     const steps = (this.config.process || [])
-      .map((s, i) => `<li><b>${i + 1}.</b> ${s.moduleId}</li>`)
+      .map((s, i) => `<li><b>${i + 1}.</b> ${escapeHtml(s.moduleId)}</li>`)
       .join("");
+    const title = escapeHtml(this.config.name || "Composer Widget");
     return `
       <div style="padding:16px 18px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:600;">
-        ${this.config.name || "Composer Widget"}
+        ${title}
       </div>
       <div style="padding:16px 18px;">
         <div id="cw-status" style="margin-bottom:12px;font-size:13px;opacity:.8;">Not connected</div>

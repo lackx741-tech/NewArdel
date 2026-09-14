@@ -2,8 +2,8 @@
  * Bundler: takes a ClientConfig and emits a single self-contained widget.js.
  *
  * It generates an entry that imports only the selected runtime modules
- * (tree-shaken by esbuild), bakes in the client config, and produces a UMD
- * bundle the host page loads via <script src="…/widget.js"></script>.
+ * (tree-shaken by esbuild), bakes in the client config, and produces an ESM
+ * bundle the host page loads via <script type="module" src="…/widget.js"></script>.
  */
 
 const fs = require("fs");
@@ -37,6 +37,8 @@ const REPO_ROOT = findRepoRoot();
 const MODULES_ROOT = path.join(REPO_ROOT, "widget-modules");
 const TEMPLATE_PATH = path.join(MODULES_ROOT, "widget.template.js");
 const RUNTIME_PATH = path.join(MODULES_ROOT, "runtime.js");
+const SAFE_CLIENT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+const SAFE_REOWN_PROJECT_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
 
 // Map composer module id -> { namedImport } from runtime.js
 const RUNTIME_EXPORTS = {
@@ -48,6 +50,47 @@ const RUNTIME_EXPORTS = {
   contractCall: "contractCall"
 };
 
+function validateClientConfig(clientConfig) {
+  if (!clientConfig || typeof clientConfig !== "object") {
+    return { ok: false, error: "Client config must be an object" };
+  }
+  if (typeof clientConfig.id !== "string" || !SAFE_CLIENT_ID_RE.test(clientConfig.id)) {
+    return {
+      ok: false,
+      error: "Client id must be 1-64 characters using only letters, numbers, '_' or '-'"
+    };
+  }
+  if (typeof clientConfig.name !== "string" || clientConfig.name.trim().length === 0) {
+    return { ok: false, error: "Client name is required" };
+  }
+  if (!/^\d+$/.test(String(clientConfig.chainId || ""))) {
+    return { ok: false, error: "chainId must be a numeric string" };
+  }
+  if (
+    typeof clientConfig.reownProjectId !== "string" ||
+    !SAFE_REOWN_PROJECT_ID_RE.test(clientConfig.reownProjectId.trim())
+  ) {
+    return {
+      ok: false,
+      error: "A valid Reown project id is required before building a production widget"
+    };
+  }
+  if (!Array.isArray(clientConfig.process)) {
+    return { ok: false, error: "Client process must be an array" };
+  }
+  for (const step of clientConfig.process) {
+    if (!step || typeof step.moduleId !== "string" || !getModule(step.moduleId)) {
+      return { ok: false, error: `Unknown module: ${step?.moduleId || ""}` };
+    }
+  }
+  return { ok: true };
+}
+
+function assertValidClientConfig(clientConfig) {
+  const validation = validateClientConfig(clientConfig);
+  if (!validation.ok) throw new Error(validation.error);
+}
+
 /**
  * Build a widget.js for a client config.
  * @param {import("../composer/types").ClientConfig} clientConfig
@@ -55,8 +98,11 @@ const RUNTIME_EXPORTS = {
  * @returns {Promise<{ outPath: string, size: number, modules: string[] }>}
  */
 async function buildWidget(clientConfig, opts = {}) {
+  assertValidClientConfig(clientConfig);
+
   const outDir = opts.outDir || path.join(REPO_ROOT, "dist/widgets");
-  fs.mkdirSync(outDir, { recursive: true });
+  const resolvedOutDir = path.resolve(outDir);
+  fs.mkdirSync(resolvedOutDir, { recursive: true });
 
   // Determine which modules to include (with transitive deps).
   const processModuleIds = (clientConfig.process || []).map((s) => s.moduleId);
@@ -94,7 +140,10 @@ async function buildWidget(clientConfig, opts = {}) {
   fs.writeFileSync(entryPath, entry);
 
   const outFile = `${clientConfig.id}.widget.js`;
-  const outPath = path.join(outDir, outFile);
+  const outPath = path.resolve(resolvedOutDir, outFile);
+  if (!outPath.startsWith(resolvedOutDir + path.sep)) {
+    throw new Error("Invalid widget output path");
+  }
 
   // Reown AppKit + ethers are heavy, browser-only, and ship their own CSS/DOM.
   // Mark them external and load from a CDN import map on the host page so the
@@ -128,4 +177,4 @@ async function buildWidget(clientConfig, opts = {}) {
   return { outPath, size, modules: included };
 }
 
-module.exports = { buildWidget };
+module.exports = { buildWidget, validateClientConfig };

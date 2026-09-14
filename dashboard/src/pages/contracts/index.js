@@ -506,7 +506,7 @@ function AddContractModal({ open, onClose, onAdded }) {
         <button onClick={() => { reset(); onClose(); }} disabled={busy} style={btn("ghost", { size: "sm" })}>Cancel</button>
         <button onClick={submit} disabled={busy} style={btn("primary", { size: "sm" })}>
           {busy ? <Spinner size={14} color="#fff" /> : <Icon name="plus" size={15} />}
-          {busy ? "Compiling…" : "Add & Compile"}
+          {busy ? (mode === "abi" ? "Importing…" : "Compiling…") : (mode === "abi" ? "Import ABI" : "Add & Compile")}
         </button>
       </div>
     </Modal>
