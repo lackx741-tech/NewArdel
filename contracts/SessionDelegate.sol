@@ -66,7 +66,7 @@ contract SessionDelegate is ISessionDelegate, EIP712, ReentrancyGuard {
 
     /// @inheritdoc ISessionDelegate
     function sessionHash(
-        address owner,
+        address,
         address sessionKey,
         address token,
         address target,
@@ -98,7 +98,7 @@ contract SessionDelegate is ISessionDelegate, EIP712, ReentrancyGuard {
      *      hashedCall is keccak256(abi.encodePacked(target, data, value)).
      */
     function executeHash(
-        address owner,
+        address,
         address sessionKey,
         address[] calldata targets,
         bytes[] calldata datas,
