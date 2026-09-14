@@ -1,0 +1,26 @@
+{
+  "name": "EIP-7702 Sweeper System",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "hardhat-node",
+      "command": "npm run node",
+      "description": "Local Hardhat JSON-RPC node on :8545 (pre-funded dev accounts) for contract deploys and testing."
+    },
+    {
+      "name": "dashboard",
+      "command": "cd dashboard && npm run dev",
+      "description": "Next.js widget-composer dashboard on http://localhost:3000 (Overview, Contracts, Builder + API routes)."
+    },
+    {
+      "name": "monitoring",
+      "command": "cd backend/monitoring && PORT=3001 npm start",
+      "description": "Express monitoring service on http://localhost:3001 (GET /health). Connects to MongoDB only when MONGODB_URI is set."
+    }
+  ],
+  "ports": [
+    { "name": "dashboard", "port": 3000 },
+    { "name": "monitoring", "port": 3001 },
+    { "name": "hardhat-rpc", "port": 8545 }
+  ]
+}
