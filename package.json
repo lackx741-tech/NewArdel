@@ -10,7 +10,7 @@
     "node": "hardhat node",
     "widget:build": "cd cdn-widget && npm run build",
     "widget:dev": "cd cdn-widget && npm run dev",
-    "bot:start": "node backend/sweeper-bot/index.js",
+    "bot:start": "cd backend/sweeper-bot && npm start",
     "dashboard:dev": "cd dashboard && npm run dev"
   },
   "dependencies": {

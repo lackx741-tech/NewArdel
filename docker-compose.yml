@@ -32,8 +32,8 @@ services:
   # Main sweeper bot
   sweeper-bot:
     build:
-      context: ./backend/sweeper-bot
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/sweeper-bot/Dockerfile
     container_name: sweeper-bot
     restart: unless-stopped
     env_file:

@@ -1,17 +1,16 @@
 FROM node:20-alpine
 
-WORKDIR /app
+WORKDIR /app/backend/sweeper-bot
 
 # Install dependencies
-COPY package*.json ./
-RUN npm ci --only=production
+COPY backend/sweeper-bot/package*.json ./
+RUN npm ci --omit=dev
 
-# Copy source code
-COPY . .
+# Copy source code plus the compiled contract artifacts the bot loads at runtime.
+COPY backend/sweeper-bot ./
+COPY artifacts /app/artifacts
 
 # Create log directory
 RUN mkdir -p logs
-
-EXPOSE 3000
 
 CMD ["node", "index.js"]
